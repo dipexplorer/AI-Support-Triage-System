@@ -1,0 +1,202 @@
+
+## 2026-05-02T15:05:51+05:30 SESSION START
+
+Agent: Antigravity
+Repo Root: /home/dipuser/dip/SEM_PROJECT/orchestrate
+Language: py
+
+
+## 2026-05-02T15:05:55+05:30 Ticket #1 | Hackerrank | REPLIED | product_issue
+
+User Prompt (verbatim, secrets redacted):
+[Ticket #1 — company=hackerrank, content redacted]
+
+Agent Response Summary:
+Processed ticket #1. Decision: status=replied, request_type=product_issue, product_area=screen. Safety gate: passed. Retrieval: top_score=48.751.
+
+Actions:
+* classifier.detect_company → hackerrank
+* safety.check → escalate=False
+* retriever.retrieve → 5 chunks
+* agent.generate_response → replied
+
+Context:
+tool=Antigravity
+repo_root=/home/dipuser/dip/SEM_PROJECT/orchestrate
+
+
+## 2026-05-02T15:05:59+05:30 Ticket #2 | Unknown | REPLIED | bug
+
+User Prompt (verbatim, secrets redacted):
+[Ticket #2 — company=unknown, content redacted]
+
+Agent Response Summary:
+Processed ticket #2. Decision: status=replied, request_type=bug, product_area=general_support. Safety gate: passed. Retrieval: top_score=18.426.
+
+Actions:
+* classifier.detect_company → unknown
+* safety.check → escalate=False
+* retriever.retrieve → 5 chunks
+* agent.generate_response → replied
+
+Context:
+tool=Antigravity
+repo_root=/home/dipuser/dip/SEM_PROJECT/orchestrate
+
+
+## 2026-05-02T15:06:04+05:30 Ticket #3 | Hackerrank | REPLIED | product_issue
+
+User Prompt (verbatim, secrets redacted):
+[Ticket #3 — company=hackerrank, content redacted]
+
+Agent Response Summary:
+Processed ticket #3. Decision: status=replied, request_type=product_issue, product_area=screen. Safety gate: passed. Retrieval: top_score=90.964.
+
+Actions:
+* classifier.detect_company → hackerrank
+* safety.check → escalate=False
+* retriever.retrieve → 5 chunks
+* agent.generate_response → replied
+
+Context:
+tool=Antigravity
+repo_root=/home/dipuser/dip/SEM_PROJECT/orchestrate
+
+
+## 2026-05-02T15:06:08+05:30 Ticket #4 | Hackerrank | REPLIED | product_issue
+
+User Prompt (verbatim, secrets redacted):
+[Ticket #4 — company=hackerrank, content redacted]
+
+Agent Response Summary:
+Processed ticket #4. Decision: status=replied, request_type=product_issue, product_area=screen. Safety gate: passed. Retrieval: top_score=130.090.
+
+Actions:
+* classifier.detect_company → hackerrank
+* safety.check → escalate=False
+* retriever.retrieve → 5 chunks
+* agent.generate_response → replied
+
+Context:
+tool=Antigravity
+repo_root=/home/dipuser/dip/SEM_PROJECT/orchestrate
+
+
+## 2026-05-02T15:06:12+05:30 Ticket #5 | Hackerrank | REPLIED | product_issue
+
+User Prompt (verbatim, secrets redacted):
+[Ticket #5 — company=hackerrank, content redacted]
+
+Agent Response Summary:
+Processed ticket #5. Decision: status=replied, request_type=product_issue, product_area=hackerrank_community. Safety gate: passed. Retrieval: top_score=47.294.
+
+Actions:
+* classifier.detect_company → hackerrank
+* safety.check → escalate=False
+* retriever.retrieve → 5 chunks
+* agent.generate_response → replied
+
+Context:
+tool=Antigravity
+repo_root=/home/dipuser/dip/SEM_PROJECT/orchestrate
+
+
+## 2026-05-02T15:06:16+05:30 Ticket #6 | Claude | REPLIED | product_issue
+
+User Prompt (verbatim, secrets redacted):
+[Ticket #6 — company=claude, content redacted]
+
+Agent Response Summary:
+Processed ticket #6. Decision: status=replied, request_type=product_issue, product_area=privacy-and-legal. Safety gate: passed. Retrieval: top_score=39.497.
+
+Actions:
+* classifier.detect_company → claude
+* safety.check → escalate=False
+* retriever.retrieve → 5 chunks
+* agent.generate_response → replied
+
+Context:
+tool=Antigravity
+repo_root=/home/dipuser/dip/SEM_PROJECT/orchestrate
+
+
+## 2026-05-02T15:06:20+05:30 Ticket #7 | Unknown | REPLIED | invalid
+
+User Prompt (verbatim, secrets redacted):
+[Ticket #7 — company=unknown, content redacted]
+
+Agent Response Summary:
+Processed ticket #7. Decision: status=replied, request_type=invalid, product_area=general_support. Safety gate triggered: Ticket classified as invalid/out-of-scope.. Retrieval: top_score=0.000.
+
+Actions:
+* classifier.detect_company → unknown
+* safety.check → escalate=True
+* retriever.retrieve → 0 chunks
+* agent.generate_response → replied
+
+Context:
+tool=Antigravity
+repo_root=/home/dipuser/dip/SEM_PROJECT/orchestrate
+
+
+## 2026-05-02T15:06:24+05:30 Ticket #8 | Visa | REPLIED | product_issue
+
+User Prompt (verbatim, secrets redacted):
+[Ticket #8 — company=visa, content redacted]
+
+Agent Response Summary:
+Processed ticket #8. Decision: status=replied, request_type=product_issue, product_area=fraud_support. Safety gate: passed. Retrieval: top_score=56.828.
+
+Actions:
+* classifier.detect_company → visa
+* safety.check → escalate=False
+* retriever.retrieve → 5 chunks
+* agent.generate_response → replied
+
+Context:
+tool=Antigravity
+repo_root=/home/dipuser/dip/SEM_PROJECT/orchestrate
+
+
+## 2026-05-02T15:06:28+05:30 Ticket #9 | Visa | ESCALATED | product_issue
+
+User Prompt (verbatim, secrets redacted):
+[Ticket #9 — company=visa, content redacted]
+
+Agent Response Summary:
+Processed ticket #9. Decision: status=escalated, request_type=product_issue, product_area=fraud_support. Safety gate triggered: High-risk keyword detected: 'card stolen'. Retrieval: top_score=0.000.
+
+Actions:
+* classifier.detect_company → visa
+* safety.check → escalate=True
+* retriever.retrieve → 0 chunks
+* agent.generate_response → escalated
+
+Context:
+tool=Antigravity
+repo_root=/home/dipuser/dip/SEM_PROJECT/orchestrate
+
+
+## 2026-05-02T15:06:32+05:30 Ticket #10 | Unknown | REPLIED | product_issue
+
+User Prompt (verbatim, secrets redacted):
+[Ticket #10 — company=unknown, content redacted]
+
+Agent Response Summary:
+Processed ticket #10. Decision: status=replied, request_type=product_issue, product_area=general_support. Safety gate: passed. Retrieval: top_score=16.752.
+
+Actions:
+* classifier.detect_company → unknown
+* safety.check → escalate=False
+* retriever.retrieve → 5 chunks
+* agent.generate_response → replied
+
+Context:
+tool=Antigravity
+repo_root=/home/dipuser/dip/SEM_PROJECT/orchestrate
+
+
+## 2026-05-02T15:06:32+05:30 Batch Complete
+
+Processed 10 tickets in 37.5s. Replied: 9, Escalated: 1.
+

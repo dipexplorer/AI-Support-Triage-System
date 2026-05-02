@@ -37,7 +37,7 @@ from config import (  # type: ignore
     CHUNK_OVERLAP_WORDS,
     CHUNK_SIZE_WORDS,
     COMPANIES,
-    DATA_DIR,
+    CORPUS_DIR,
     MIN_BM25_SCORE,
     TOP_K_DOCS,
 )
@@ -117,7 +117,7 @@ def _chunk(text: str, size: int = CHUNK_SIZE_WORDS, overlap: int = CHUNK_OVERLAP
 
 # ── Corpus scanner ────────────────────────────────────────────────────────────
 
-def _scan_corpus(data_dir: Path = DATA_DIR) -> list[dict]:
+def _scan_corpus(data_dir: Path = CORPUS_DIR) -> list[dict]:
     """
     Walk data/ and return all readable files with metadata.
     Returns list of { company, source, text }
@@ -166,7 +166,7 @@ class BM25Retriever:
         self._index: BM25Okapi | None = None
         self._built = False
 
-    def build(self, data_dir: Path = DATA_DIR) -> None:
+    def build(self, data_dir: Path = CORPUS_DIR) -> None:
         """
         Scan corpus → chunk documents → tokenize → build BM25 index.
         """

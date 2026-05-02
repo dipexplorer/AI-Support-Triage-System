@@ -1,7 +1,0 @@
-{
-    "venvPath": "/home/dipuser/dip/SEM_PROJECT/orchestrate",
-    "venv": ".venv",
-    "extraPaths": [
-        "."
-    ]
-}

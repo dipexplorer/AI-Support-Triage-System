@@ -1,134 +1,165 @@
-# HackerRank Orchestrate
+# AI Support Triage System
 
-Starter repository for the **HackerRank Orchestrate** 24-hour hackathon (May 1–2, 2026).
+A production-ready, multi-domain support ticket triage agent that intelligently classifies, routes, and responds to customer support tickets using a **Hybrid BM25 + Gemini AI** pipeline.
 
-Build a terminal-based AI agent that triages real support tickets across three product ecosystems; **HackerRank**, **Claude**, and **Visa** — using only the support corpus shipped in this repo.
+## ✨ Features
 
-Read [`problem_statement.md`](./problem_statement.md) for the full task spec, input/output schema, and allowed values, and [`evalutation_criteria.md`](./evalutation_criteria.md) for how submissions are scored.
+- **Multi-Domain Support** — Handles tickets across multiple product domains simultaneously
+- **Hybrid AI Pipeline** — BM25 fast retrieval + Gemini LLM synthesis for intelligent, grounded responses
+- **Zero Hallucination** — Responses are always grounded in your own support corpus; agent escalates when it doesn't know
+- **Safety Firewall** — Detects and blocks prompt injections, malicious commands, and high-risk fraud requests before they reach the AI
+- **Fail-Safe Fallback** — If the LLM API is unavailable, the system seamlessly falls back to a smart deterministic BM25 response
+- **Structured Audit Logs** — Every triage decision is logged with reasoning, confidence score, and company context
+- **Strict Schema Validation** — Pydantic ensures every output matches the exact required schema
 
----
-
-## Contents
-
-1. [Repository layout](#repository-layout)
-2. [What you need to build](#what-you-need-to-build)
-3. [Where your code goes](#where-your-code-goes)
-4. [Quickstart](#quickstart)
-5. [Chat transcript logging](#chat-transcript-logging)
-6. [Submission](#submission)
-7. [Judge interview](#judge-interview)
-8. [Evaluation criteria](#evaluation-criteria)
-
----
-
-## Repository layout
+## 🏗️ Architecture
 
 ```
-.
-├── AGENTS.md                       # Rules for AI coding tools + transcript logging
-├── problem_statement.md            # Full task description and I/O schema
-├── README.md                       # You are here
-├── code/                           # ← Build your agent here
-│   └── main.py                     #   Entry point (rename/extend as you like)
-├── data/                           # Local-only support corpus (no network needed)
-│   ├── hackerrank/                 #   HackerRank help center
-│   ├── claude/                     #   Claude Help Center export
-│   └── visa/                       #   Visa consumer + small-business support
-└── support_tickets/
-    ├── sample_support_tickets.csv  # Inputs + expected outputs (for development)
-    ├── support_tickets.csv         # Inputs only (run your agent on these)
-    └── output.csv                  # Write your agent's predictions here
+Input CSV → Classifier → Safety Gate → BM25 Retriever → Gemini Synthesizer → Output CSV
+                              ↓                 ↓                  ↓
+                         Escalate        Escalate (low        Smart Fallback
+                        (high risk)       confidence)         (API offline)
 ```
 
----
+### Module Breakdown
 
-## What you need to build
+| Module | Role |
+|---|---|
+| `src/main.py` | Orchestrator — reads input, runs the full pipeline, writes output |
+| `src/classifier.py` | Detects company/domain and request type using keyword matching |
+| `src/safety.py` | Deterministic firewall — blocks injections, fraud, malicious inputs |
+| `src/retriever.py` | BM25 Okapi search engine — indexes corpus and retrieves top-K chunks |
+| `src/agent.py` | Hybrid brain — tries Gemini first, falls back to smart BM25 format |
+| `src/models.py` | Pydantic schemas for input, output, and retrieved documents |
+| `src/config.py` | Central config — all paths, thresholds, and keyword lists |
+| `src/logger.py` | Structured audit logging for every triage decision |
 
-A terminal-based agent that, for each row in `support_tickets/support_tickets.csv`, produces:
+## 📁 Project Structure
 
-| Column         | Allowed values                                          |
-| -------------- | ------------------------------------------------------- |
-| `status`       | `replied`, `escalated`                                  |
-| `product_area` | most relevant support category / domain area            |
-| `response`     | user-facing answer grounded in the provided corpus      |
-| `justification`| concise explanation of the routing/answering decision   |
-| `request_type` | `product_issue`, `feature_request`, `bug`, `invalid`    |
+```
+AI-Support-Triage-System/
+├── src/                    # Core agent source code
+│   ├── main.py
+│   ├── agent.py
+│   ├── classifier.py
+│   ├── config.py
+│   ├── logger.py
+│   ├── models.py
+│   ├── retriever.py
+│   ├── safety.py
+│   └── requirements.txt
+├── corpus/                 # Support documentation corpus
+│   ├── hackerrank/
+│   ├── claude/
+│   └── visa/
+├── tickets/
+│   ├── input/              # Input CSV files
+│   │   └── tickets.csv
+│   └── output/             # Generated output
+│       └── output.csv
+├── logs/                   # Triage audit logs
+├── docs/                   # Architecture and design docs
+├── .env.example
+└── README.md
+```
 
-Hard requirements (from `problem_statement.md`):
+## 🚀 Quick Start
 
-- Must be **terminal-based**.
-- Must use **only the provided support corpus** (no live web calls for ground-truth answers).
-- Must **escalate** high-risk, sensitive, or unsupported cases instead of guessing.
-- Must avoid hallucinated policies or unsupported claims.
-
-Beyond that you are free to bring your own approach — RAG, vector DBs, tool use, structured output, agent frameworks, classical ML, or anything else.
-
----
-
-## Where your code goes
-
-All of your work belongs in [`code/`](./code/). The repo ships with an empty `code/main.py` you can grow into your full agent — add more modules (`agent.py`, `retriever.py`, `classifier.py`, etc.) next to it as needed.
-
-Conventions:
-
-- Put a **README inside `code/`** describing how to install dependencies and run your agent.
-- Read secrets **from environment variables only** (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …). Copy `.env.example` → `.env` (already gitignored) if you keep one. **Never hardcode keys.**
-- Be **deterministic** where possible. Seed any random sampling.
-- Write responses to `support_tickets/output.csv`.
-
----
-
-## Quickstart
-
-Clone this repository:
+### 1. Clone and Setup
 
 ```bash
-git clone git@github.com:interviewstreet/hackerrank-orchestrate-may26.git
-cd hackerrank-orchestrate-may26
+git clone git@github.com:dipexplorer/AI-Support-Triage-System.git
+cd AI-Support-Triage-System
+python -m venv .venv
+source .venv/bin/activate
+pip install -r src/requirements.txt
 ```
 
-You are free to use any language or runtime. We recommend **Python**, **JavaScript**, or **TypeScript**.
+### 2. Configure Environment
 
----
+```bash
+cp .env.example .env
+# Edit .env and add your GEMINI_API_KEY
+```
 
-## Chat transcript logging
+### 3. Add Your Corpus
 
-This repo ships with an `AGENTS.md` that any modern AI coding tool (Cursor, Claude Code, Codex, Gemini CLI, Copilot, etc.) will read. It instructs the tool to append every conversation turn to a single shared log file:
+Place your support documentation (`.md`, `.txt`, `.html` files) in the `corpus/` directory. Organize by domain:
 
-| Platform       | Path                                              |
-| -------------- | ------------------------------------------------- |
-| macOS / Linux  | `$HOME/hackerrank_orchestrate/log.txt`            |
-| Windows        | `%USERPROFILE%\hackerrank_orchestrate\log.txt`    |
+```
+corpus/
+├── your-product-1/
+│   ├── faq.md
+│   └── billing.md
+└── your-product-2/
+    └── getting-started.md
+```
 
-You don't need to do anything to enable it — just use your AI tool normally. You'll upload this `log.txt` as your chat transcript at submission time.
+### 4. Run
 
----
+```bash
+# Run on your tickets
+python src/main.py
 
-## Submission
+# Run on a sample file
+python src/main.py --sample
 
-Submit on the HackerRank Community Platform:
-<https://www.hackerrank.com/contests/hackerrank-orchestrate-may26/challenges/support-agent/submission>
+# Custom input/output paths
+python src/main.py --input tickets/input/my_tickets.csv --output tickets/output/results.csv
+```
 
-You will upload **three** files:
+## 📊 Input / Output Schema
 
-1. **Code zip** — zip your `code/` directory and upload it. Exclude virtualenvs, `node_modules`, build artifacts, the `data/` corpus, and the `support_tickets/` CSVs.
-2. **Predictions CSV** — your agent's output for `support_tickets/support_tickets.csv` (i.e. the populated `output.csv`).
-3. **Chat transcript** — the `log.txt` from the path in [Chat transcript logging](#chat-transcript-logging).
+### Input CSV (`tickets/input/tickets.csv`)
 
----
+| Column | Description |
+|---|---|
+| `issue` | The main ticket body or question |
+| `subject` | Optional subject line (can be blank or noisy) |
+| `company` | Domain name or `None` for auto-detection |
 
-## Judge interview
+### Output CSV (`tickets/output/output.csv`)
 
-After a successful submission, your AI Judge interview will happen within a few hours after the hackathon ends. It will stay open for the next 4 hours. 
+| Column | Values | Description |
+|---|---|---|
+| `status` | `replied` / `escalated` | Whether the agent answered or routed to human |
+| `product_area` | string | Support category (e.g., `billing`, `general_support`) |
+| `response` | string | User-facing response grounded in the corpus |
+| `justification` | string | Internal reasoning for the decision |
+| `request_type` | `product_issue` / `feature_request` / `bug` / `invalid` | Classification |
 
-The AI Judge will have access to your submission and may ask about your approach, decisions, and how you used AI while building your solution. The interview will be 30 minutes long, and keeping your camera on is mandatory.
+## ⚙️ Configuration
 
-Results will be announced on May 15, 2026
+All tunable parameters are in `src/config.py`:
 
----
+```python
+TOP_K_DOCS       = 5      # chunks retrieved per query
+MIN_BM25_SCORE   = 1.0    # escalate if best score is below this
+CHUNK_SIZE_WORDS = 250     # corpus chunk size in words
+```
 
-## Evaluation criteria
+To add a new supported domain, add it to `COMPANIES` and `COMPANY_KEYWORDS` in `config.py`.
 
-Submissions are scored across four dimensions: agent design (your `code/`), the AI Judge interview, output accuracy on `support_tickets/output.csv`, and AI fluency from your chat transcript.
+## 🔒 Safety Features
 
-See [`evalutation_criteria.md`](./evalutation_criteria.md) for the full rubric.
+The safety module (`src/safety.py`) runs **before** any AI processing:
+
+- **Prompt Injection Detection** — Blocks "ignore previous instructions", jailbreak attempts
+- **Malicious Command Detection** — Blocks `rm -rf`, `DROP TABLE`, etc.
+- **High-Risk Keyword Escalation** — Auto-escalates fraud, account compromise, financial distress
+- **Language/Unicode Abuse Detection** — Flags suspicious encoding patterns
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Retrieval | `rank-bm25` (BM25 Okapi) |
+| LLM Synthesis | Google Gemini 2.0 Flash (optional) |
+| Data Validation | Pydantic v2 |
+| Data Processing | pandas |
+| Logging | loguru |
+| CLI Progress | rich |
+
+## 📜 License
+
+MIT License — free to use, modify, and distribute.

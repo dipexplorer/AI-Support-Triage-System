@@ -1,42 +1,43 @@
 """
-config.py — Central configuration. All constants in one place.
+config.py — Central configuration for AI Support Triage System.
 
-WHY ONE FILE: Change a threshold here → affects all modules instantly.
-No hunting across files.
+All paths, thresholds, and keywords in one place.
+Change here → affects all modules instantly.
 """
 
 import os
 from pathlib import Path
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-CODE_DIR   = Path(__file__).parent.resolve()
-REPO_ROOT  = CODE_DIR.parent.resolve()
+SRC_DIR    = Path(__file__).parent.resolve()
+REPO_ROOT  = SRC_DIR.parent.resolve()
 
 from dotenv import load_dotenv
 
 # ── Load Secrets ──────────────────────────────────────────────────────────────
 load_dotenv(REPO_ROOT / ".env", override=False)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-DATA_DIR   = REPO_ROOT / "data"
-TICKETS_DIR = REPO_ROOT / "support_tickets"
 
-INPUT_CSV  = TICKETS_DIR / "support_tickets.csv"
-SAMPLE_CSV = TICKETS_DIR / "sample_support_tickets.csv"
-OUTPUT_CSV = TICKETS_DIR / "output.csv"
+CORPUS_DIR  = REPO_ROOT / "corpus"
+TICKETS_DIR = REPO_ROOT / "tickets"
 
-LOG_DIR    = Path.home() / "hackerrank_orchestrate"
-LOG_FILE   = LOG_DIR / "log.txt"
+INPUT_CSV  = TICKETS_DIR / "input"  / "tickets.csv"
+SAMPLE_CSV = TICKETS_DIR / "input"  / "sample_tickets.csv"
+OUTPUT_CSV = TICKETS_DIR / "output" / "output.csv"
 
-# ── BM25 retrieval ────────────────────────────────────────────────────────────
-TOP_K_DOCS = 5           # how many docs to retrieve per query
-MIN_BM25_SCORE = 1.0     # below this → escalate (no relevant docs found)
-CHUNK_SIZE_WORDS = 250   # words per corpus chunk
-CHUNK_OVERLAP_WORDS = 30 # overlap between chunks
+LOG_DIR    = REPO_ROOT / "logs"
+LOG_FILE   = LOG_DIR / "triage.log"
 
-# ── Companies ─────────────────────────────────────────────────────────────────
+# ── BM25 Retrieval ────────────────────────────────────────────────────────────
+TOP_K_DOCS          = 5     # chunks returned per query
+MIN_BM25_SCORE      = 1.0   # below this → escalate (no relevant docs found)
+CHUNK_SIZE_WORDS    = 250   # words per corpus chunk
+CHUNK_OVERLAP_WORDS = 30    # overlap between consecutive chunks
+
+# ── Supported Domains ─────────────────────────────────────────────────────────
+# Add new domains here to expand the system to more products.
 COMPANIES = ["hackerrank", "claude", "visa"]
 
-# Keywords to identify which company a ticket belongs to
 COMPANY_KEYWORDS: dict[str, list[str]] = {
     "hackerrank": [
         "hackerrank", "hacker rank", "assessment", "test platform",
@@ -57,8 +58,8 @@ COMPANY_KEYWORDS: dict[str, list[str]] = {
     ],
 }
 
-# ── Escalation keywords (always escalate, no reply) ───────────────────────────
-# WHY: These are HIGH RISK situations. Wrong auto-reply = real harm.
+# ── Escalation Keywords (always escalate, never auto-reply) ───────────────────
+# These are HIGH RISK situations. A wrong auto-reply can cause real harm.
 ESCALATION_KEYWORDS: list[str] = [
     # Financial fraud
     "fraud", "stolen card", "card stolen", "unauthorized transaction",
@@ -72,16 +73,16 @@ ESCALATION_KEYWORDS: list[str] = [
     "increase my score", "increase score", "change my score",
     "review my answers", "move me to the next round", "tell the company to hire",
     "force pass", "override my result",
-    # Billing
+    # Billing disputes
     "refund", "pause subscription", "cancel subscription",
     "order id", "payment dispute", "chargeback",
     # Admin bypass
     "even though i am not", "even though i'm not", "restore my access",
-    # Urgent cash / financial distress
+    # Financial distress
     "urgent cash", "need cash now",
 ]
 
-# ── Prompt injection patterns (regex) ─────────────────────────────────────────
+# ── Prompt Injection Patterns (regex) ─────────────────────────────────────────
 INJECTION_PATTERNS: list[str] = [
     r"ignore (all )?(previous|prior) instructions",
     r"reveal (your )?(system )?prompt",
@@ -94,7 +95,7 @@ INJECTION_PATTERNS: list[str] = [
     r"bypass (your )?(safety|filter|restriction)",
 ]
 
-# ── Malicious command patterns (regex) ────────────────────────────────────────
+# ── Malicious Command Patterns (regex) ────────────────────────────────────────
 MALICIOUS_PATTERNS: list[str] = [
     r"delete (all )?files",
     r"rm -rf",
@@ -102,14 +103,14 @@ MALICIOUS_PATTERNS: list[str] = [
     r"give me (the )?code to",
 ]
 
-# ── Product area defaults per company ─────────────────────────────────────────
+# ── Default Product Area per Domain ───────────────────────────────────────────
 DEFAULT_PRODUCT_AREA: dict[str, str] = {
     "hackerrank": "screen",
-    "claude": "claude",
-    "visa": "general_support",
-    "unknown": "general_support",
+    "claude":     "general",
+    "visa":       "general_support",
+    "unknown":    "general_support",
 }
 
-# ── Valid output values (problem_statement.md) ────────────────────────────────
+# ── Valid Output Schema Values ────────────────────────────────────────────────
 VALID_STATUSES      = {"replied", "escalated"}
 VALID_REQUEST_TYPES = {"product_issue", "feature_request", "bug", "invalid"}

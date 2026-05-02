@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, model_validator
 # ── Input ─────────────────────────────────────────────────────────────────────
 
 class TicketInput(BaseModel):
-    """One row from support_tickets.csv."""
+    """One row from the input tickets CSV."""
     issue:   str = Field(default="")
     subject: str = Field(default="")
     company: str = Field(default="None")
