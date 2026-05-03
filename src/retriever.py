@@ -33,10 +33,9 @@ from pathlib import Path
 from rank_bm25 import BM25Okapi  # type: ignore
 from rich.console import Console  # type: ignore
 
-from config import (  # type: ignore
+from config import (
     CHUNK_OVERLAP_WORDS,
     CHUNK_SIZE_WORDS,
-    COMPANIES,
     CORPUS_DIR,
     MIN_BM25_SCORE,
     TOP_K_DOCS,
@@ -119,21 +118,29 @@ def _chunk(text: str, size: int = CHUNK_SIZE_WORDS, overlap: int = CHUNK_OVERLAP
 
 def _scan_corpus(data_dir: Path = CORPUS_DIR) -> list[dict]:
     """
-    Walk data/ and return all readable files with metadata.
+    Walk corpus/ and return all readable files with metadata.
+
+    DYNAMIC: Scans ALL subdirectories in corpus/, not just hardcoded COMPANIES.
+    This means any new company folder added at runtime is automatically included.
+
     Returns list of { company, source, text }
     """
     docs = []
-    for company in COMPANIES:
-        company_dir = data_dir / company
-        if not company_dir.exists():
-            console.print(f"[yellow]Warning: corpus dir not found: {company_dir}[/yellow]")
+    if not data_dir.exists():
+        console.print(f"[red]ERROR: corpus dir not found: {data_dir}[/red]")
+        return docs
+
+    # Scan every subdirectory — no hardcoded list needed
+    for company_dir in sorted(data_dir.iterdir()):
+        if not company_dir.is_dir():
             continue
+        company = company_dir.name
         count = 0
         for fp in company_dir.rglob("*"):
             if fp.suffix.lower() not in {".md", ".txt"} or not fp.is_file():
                 continue
             try:
-                raw = fp.read_text(encoding="utf-8", errors="ignore")
+                raw  = fp.read_text(encoding="utf-8", errors="ignore")
                 text = _clean(raw)
                 if len(text.strip()) < 30:
                     continue
@@ -142,10 +149,11 @@ def _scan_corpus(data_dir: Path = CORPUS_DIR) -> list[dict]:
                     "source":  str(fp.relative_to(data_dir)),
                     "text":    text,
                 })
-                count += 1  # type: ignore
+                count += 1
             except Exception:
                 pass
-        console.print(f"  [dim]Loaded {count} files for '{company}'[/dim]")
+        if count > 0:
+            console.print(f"  [dim]Loaded {count} files for '{company}'[/dim]")
     console.print(f"  [dim]Total documents: {len(docs)}[/dim]")
     return docs
 
@@ -166,19 +174,25 @@ class BM25Retriever:
         self._index: BM25Okapi | None = None
         self._built = False
 
-    def build(self, data_dir: Path = CORPUS_DIR) -> None:
+    def build(self, data_dir: Path = CORPUS_DIR, force: bool = False) -> None:
         """
         Scan corpus → chunk documents → tokenize → build BM25 index.
+        Pass force=True to rebuild after uploading new company docs.
         """
-        if self._built:
+        if self._built and not force:
             return
+
+        self._built = False
+        self._chunks = []
+        self._tokenized = []
+        self._index = None
 
         console.print("\n[cyan]Building BM25 index…[/cyan]")
         t0 = time.time()
 
         docs = _scan_corpus(data_dir)
         if not docs:
-            raise RuntimeError("No corpus files found in data/ directory.")
+            raise RuntimeError("No corpus files found in corpus/ directory.")
 
         # Chunk all documents
         for doc in docs:
@@ -281,4 +295,17 @@ def get_retriever() -> BM25Retriever:
     global _retriever
     if _retriever is None:
         _retriever = BM25Retriever()
+    return _retriever
+
+
+def rebuild_retriever() -> BM25Retriever:
+    """
+    Force a complete BM25 index rebuild.
+    Called after new corpus docs are uploaded via the Corpus Management UI.
+    Returns the freshly built retriever.
+    """
+    global _retriever
+    if _retriever is None:
+        _retriever = BM25Retriever()
+    _retriever.build(force=True)
     return _retriever

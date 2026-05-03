@@ -84,6 +84,10 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
         Analytics
       </button>
+      <button class="tab-btn tab-corpus" id="tabCorpus" onclick="switchTab('corpus')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        Corpus
+      </button>
     </div>
 
     <!-- ── SINGLE TICKET ─────────────────────────────────────────── -->
@@ -251,6 +255,105 @@
           </table>
         </div>
       </div>
+    </div>
+
+    <!-- ── CORPUS MANAGEMENT TAB ───────────────────────────────── -->
+    <div id="panelCorpus" class="panel hidden">
+
+      <!-- Info Banner -->
+      <div class="corpus-banner">
+        <div class="corpus-banner-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        </div>
+        <div>
+          <div class="corpus-banner-title">Plug in any company's support docs</div>
+          <div class="corpus-banner-sub">Upload a ZIP of <code>.md</code> or <code>.txt</code> files → Rebuild Index → System starts triaging for that company instantly.</div>
+        </div>
+      </div>
+
+      <!-- Existing Companies -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="batch-result-header">
+          <div>
+            <h2 class="card-title">Registered Companies</h2>
+            <p class="card-desc" style="margin-top:4px">All companies currently in the BM25 index.</p>
+          </div>
+          <button class="btn btn-ghost" onclick="loadCorpus()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Refresh
+          </button>
+        </div>
+        <div id="corpusLoading" class="loading-msg">Loading corpus…</div>
+        <div class="corpus-grid" id="corpusGrid"></div>
+      </div>
+
+      <!-- Upload New Company -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Add New Company</h2>
+          <p class="card-desc">Upload a ZIP file containing <code class="code-inline">.md</code> or <code class="code-inline">.txt</code> support documentation files.</p>
+        </div>
+
+        <div class="corpus-upload-grid">
+          <div>
+            <div class="field">
+              <label class="field-label" for="corpusCompanyName">Company Name <span class="required">*</span></label>
+              <input class="field-input" id="corpusCompanyName" type="text" placeholder="e.g. Shopify, Stripe, Notion…" />
+            </div>
+            <div class="field" style="margin-top:14px">
+              <label class="field-label">Documentation ZIP <span class="required">*</span></label>
+              <div class="drop-zone" id="corpusDropZone"
+                ondragover="corpusDragOver(event)" ondragleave="corpusDragLeave()"
+                ondrop="corpusDrop(event)" onclick="document.getElementById('corpusZipFile').click()">
+                <div class="drop-icon" id="corpusDropIcon">
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                </div>
+                <p class="drop-text" id="corpusDropText">Drag &amp; drop ZIP here</p>
+                <p class="drop-sub" id="corpusDropSub">or click to browse · max 50 MB</p>
+                <input type="file" id="corpusZipFile" accept=".zip" style="display:none" onchange="corpusFileSelect(event)" />
+              </div>
+            </div>
+            <button class="btn btn-primary" style="margin-top:14px;width:100%" id="corpusUploadBtn" onclick="uploadCorpus()">
+              <span class="btn-text">Upload &amp; Extract Docs</span>
+              <div class="btn-spinner hidden" id="corpusSpinner"></div>
+            </button>
+          </div>
+
+          <!-- Instructions -->
+          <div class="corpus-steps">
+            <div class="corpus-step">
+              <div class="step-num">1</div>
+              <div><strong>Prepare a ZIP</strong><br>Put your <code>.md</code> or <code>.txt</code> docs into a folder, then ZIP it. Nested folders are fine.</div>
+            </div>
+            <div class="corpus-step">
+              <div class="step-num">2</div>
+              <div><strong>Enter company name</strong><br>Use a clear name like "Shopify" or "Stripe". It will become the company slug.</div>
+            </div>
+            <div class="corpus-step">
+              <div class="step-num">3</div>
+              <div><strong>Upload &amp; Extract</strong><br>Docs are saved to <code>corpus/slug/</code> on the server.</div>
+            </div>
+            <div class="corpus-step">
+              <div class="step-num">4</div>
+              <div><strong>Rebuild Index</strong><br>Click the Rebuild button below to add the new company to the BM25 index.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rebuild Section -->
+        <div class="corpus-rebuild">
+          <div class="rebuild-info">
+            <div class="rebuild-status" id="rebuildStatus">Index is ready</div>
+            <div class="rebuild-sub" id="rebuildSub">After uploading new docs, click Rebuild to activate them.</div>
+          </div>
+          <button class="btn btn-rebuild" id="rebuildBtn" onclick="rebuildIndex()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            <span class="btn-text">Rebuild Index</span>
+            <div class="btn-spinner hidden" id="rebuildSpinner"></div>
+          </button>
+        </div>
+      </div>
+
     </div>
 
   </main>

@@ -54,12 +54,13 @@ async function checkHealth() {
 
 // ── Tab Switch ────────────────────────────────────────────────────────────────
 function switchTab(tab) {
-  ['single','batch','history','analytics'].forEach(t => {
+  ['single','batch','history','analytics','corpus'].forEach(t => {
     document.getElementById(`panel${cap(t)}`).classList.toggle('hidden', t !== tab);
     document.getElementById(`tab${cap(t)}`).classList.toggle('active', t === tab);
   });
   if (tab === 'history')   loadHistory();
   if (tab === 'analytics') loadAnalytics();
+  if (tab === 'corpus')    loadCorpus();
 }
 
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
@@ -442,4 +443,159 @@ function parseCSVLine(line) {
   }
   result.push(current);
   return result;
+}
+
+// ── Corpus Management Tab ─────────────────────────────────────────────────────
+
+let _corpusZipFile = null;
+
+// Company emoji map for visual variety
+const COMPANY_EMOJI = {
+  hackerrank: '💻', claude: '🤖', visa: '💳',
+  shopify: '🛍️', stripe: '💳', notion: '📝', slack: '💬',
+  github: '🐙', linear: '📊', intercom: '💬',
+};
+function companyEmoji(slug) {
+  return COMPANY_EMOJI[slug.toLowerCase()] || '🏢';
+}
+
+async function loadCorpus() {
+  const grid    = document.getElementById('corpusGrid');
+  const loading = document.getElementById('corpusLoading');
+  loading.style.display = 'block';
+  grid.innerHTML = '';
+  try {
+    const res  = await fetch(`${API_BASE}/corpus/companies`);
+    const data = await res.json();
+    loading.style.display = 'none';
+    renderCorpusGrid(data.companies || []);
+  } catch(e) {
+    loading.textContent = 'Failed to load corpus data.';
+  }
+}
+
+function renderCorpusGrid(companies) {
+  const grid = document.getElementById('corpusGrid');
+  if (!companies.length) {
+    grid.innerHTML = '<p style="color:var(--text-muted);padding:16px 0">No companies registered yet.</p>';
+    return;
+  }
+  grid.innerHTML = companies.map(c => `
+    <div class="corpus-card" id="card-${c.slug}">
+      <div class="corpus-card-top">
+        <div class="corpus-card-icon">${companyEmoji(c.slug)}</div>
+        <span class="${c.is_default ? 'corpus-badge-default' : 'corpus-badge-custom'}">${c.is_default ? 'built-in' : 'custom'}</span>
+      </div>
+      <div class="corpus-card-name">${escHtml(c.display_name)}</div>
+      <div class="corpus-card-slug">${escHtml(c.slug)}</div>
+      <div class="corpus-card-docs">
+        <span>${c.doc_count.toLocaleString()}</span>
+        documents indexed
+      </div>
+      ${!c.is_default ? `<button class="corpus-card-del" onclick="deleteCompany('${c.slug}')">🗑 Remove</button>` : ''}
+    </div>`).join('');
+}
+
+async function deleteCompany(slug) {
+  if (!confirm(`Remove corpus for "${slug}"?\nThis will delete all uploaded docs. The index will need to be rebuilt.`)) return;
+  try {
+    const res  = await fetch(`${API_BASE}/corpus/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Delete failed');
+    showToast(`Deleted "${slug}". Now rebuild the index.`, 'success');
+    loadCorpus();
+    setRebuildPending();
+  } catch(e) {
+    showToast(`Error: ${e.message}`, 'error');
+  }
+}
+
+// ── ZIP Drop Zone ─────────────────────────────────────────────────────────────
+
+function corpusDragOver(e) {
+  e.preventDefault();
+  document.getElementById('corpusDropZone').classList.add('dragging');
+}
+function corpusDragLeave() {
+  document.getElementById('corpusDropZone').classList.remove('dragging');
+}
+function corpusDrop(e) {
+  e.preventDefault();
+  document.getElementById('corpusDropZone').classList.remove('dragging');
+  const f = e.dataTransfer.files?.[0];
+  if (f) applyCorpusFile(f);
+}
+function corpusFileSelect(e) {
+  const f = e.target.files?.[0];
+  if (f) applyCorpusFile(f);
+}
+function applyCorpusFile(file) {
+  if (!file.name.endsWith('.zip')) { showToast('Please select a .zip file.', 'error'); return; }
+  _corpusZipFile = file;
+  document.getElementById('corpusDropText').textContent = file.name;
+  document.getElementById('corpusDropSub').textContent  = formatBytes(file.size) + ' · Click to change';
+  document.getElementById('corpusDropIcon').innerHTML   =
+    `<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+}
+
+// ── Upload & Rebuild ──────────────────────────────────────────────────────────
+
+async function uploadCorpus() {
+  const name = document.getElementById('corpusCompanyName').value.trim();
+  if (!name)           { showToast('Please enter a company name.', 'error'); return; }
+  if (!_corpusZipFile) { showToast('Please select a ZIP file.', 'error'); return; }
+
+  setLoading('corpusUploadBtn', 'corpusSpinner', true);
+  try {
+    const fd = new FormData();
+    fd.append('company_name', name);
+    fd.append('file', _corpusZipFile);
+
+    const res  = await fetch(`${API_BASE}/corpus/upload`, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Upload failed');
+
+    showToast(`✅ "${data.slug}" — ${data.doc_count} docs extracted! Now rebuild the index.`, 'success');
+    loadCorpus();
+    setRebuildPending();
+
+    // Reset form
+    document.getElementById('corpusCompanyName').value = '';
+    _corpusZipFile = null;
+    document.getElementById('corpusDropText').textContent = 'Drag & drop ZIP here';
+    document.getElementById('corpusDropSub').textContent  = 'or click to browse · max 50 MB';
+    document.getElementById('corpusDropIcon').innerHTML   =
+      `<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`;
+  } catch(e) {
+    showToast(`Upload error: ${e.message}`, 'error');
+  } finally {
+    setLoading('corpusUploadBtn', 'corpusSpinner', false);
+  }
+}
+
+async function rebuildIndex() {
+  setLoading('rebuildBtn', 'rebuildSpinner', true);
+  document.getElementById('rebuildStatus').textContent = '⚙️ Rebuilding index…';
+  document.getElementById('rebuildSub').textContent    = 'This takes 2–10 seconds depending on corpus size.';
+  try {
+    const res  = await fetch(`${API_BASE}/corpus/rebuild`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Rebuild failed');
+    document.getElementById('rebuildStatus').textContent = `✅ Index ready — ${data.chunks_indexed.toLocaleString()} chunks`;
+    document.getElementById('rebuildSub').textContent    = `${data.company_count} companies: ${data.companies.join(', ')}`;
+    showToast(`Index rebuilt! ${data.chunks_indexed.toLocaleString()} chunks from ${data.company_count} companies.`, 'success');
+    loadCorpus();
+    checkHealth();
+  } catch(e) {
+    document.getElementById('rebuildStatus').textContent = '❌ Rebuild failed';
+    showToast(`Rebuild error: ${e.message}`, 'error');
+  } finally {
+    setLoading('rebuildBtn', 'rebuildSpinner', false);
+  }
+}
+
+function setRebuildPending() {
+  document.getElementById('rebuildStatus').textContent = '⚠️ Index rebuild required';
+  document.getElementById('rebuildSub').textContent    = 'New docs uploaded. Click Rebuild to activate them.';
+  document.getElementById('rebuildStatus').style.color = 'var(--amber)';
 }

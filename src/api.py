@@ -2,16 +2,16 @@
 api.py — FastAPI REST API for AI Support Triage System.
 
 ENDPOINTS:
-  GET  /             → Web UI Dashboard
-  GET  /health       → System health and corpus stats
-  POST /ask          → Triage a single ticket (JSON in, JSON out)
-  POST /batch        → Triage a CSV file (CSV in, CSV out)
-  GET  /history      → Recent triage decisions from SQLite
-  GET  /analytics    → Aggregated statistics for charts
-
-STARTUP:
-  BM25 index is built ONCE at server startup and reused for all requests.
-  SQLite DB is initialized at startup (creates file if not exists).
+  GET  /                    → Web UI Dashboard
+  GET  /health              → System health and corpus stats
+  POST /ask                 → Triage a single ticket (JSON in, JSON out)
+  POST /batch               → Triage a CSV file (CSV in, CSV out)
+  GET  /history             → Recent triage decisions from SQLite
+  GET  /analytics           → Aggregated statistics for charts
+  GET  /corpus/companies    → List all registered corpus companies
+  POST /corpus/upload       → Upload a ZIP of docs for a new company
+  DELETE /corpus/{slug}     → Remove a dynamically added company
+  POST /corpus/rebuild      → Force BM25 index rebuild
 """
 
 import io
@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-from fastapi import FastAPI, File, HTTPException, UploadFile, Query
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -38,9 +38,15 @@ from config import CORPUS_DIR, COMPANIES
 from models import TicketInput, make_escalation
 from classifier import detect_company, classify_request_type, infer_product_area
 from safety import check as safety_check
-from retriever import get_retriever
+from retriever import get_retriever, rebuild_retriever
 from agent import generate_response
 from database import init_db, save_ticket, get_history, get_analytics
+from corpus_manager import (
+    list_companies  as cm_list,
+    extract_zip_corpus,
+    delete_company_corpus,
+    corpus_stats,
+)
 
 # ── Global BM25 Retriever (initialized once at startup) ───────────────────────
 _retriever = None
@@ -321,4 +327,98 @@ def analytics():
     try:
         return get_analytics()
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Corpus Management ───────────────────────────────────────────────────────────────
+
+@app.get("/corpus/companies", tags=["Corpus"])
+def get_companies():
+    """
+    List all companies in the corpus with their document counts.
+    Includes both built-in companies and dynamically uploaded ones.
+    """
+    return corpus_stats()
+
+
+@app.post("/corpus/upload", tags=["Corpus"])
+async def upload_corpus(
+    company_name: str = Form(..., description="Company display name, e.g. Shopify"),
+    file: UploadFile = File(..., description="ZIP archive containing .md or .txt docs"),
+):
+    """
+    Upload a ZIP of support documentation for a new company.
+
+    After upload, call POST /corpus/rebuild to activate the new docs.
+
+    Steps:
+      1. Validates ZIP (max 50 MB, must contain .md/.txt files)
+      2. Extracts into corpus/{slug}/
+      3. Returns slug + doc count
+      4. You MUST call /corpus/rebuild to update the BM25 index
+    """
+    try:
+        raw = await file.read()
+        result = extract_zip_corpus(raw, company_name)
+        return {
+            "success":   True,
+            "slug":      result["slug"],
+            "doc_count": result["doc_count"],
+            "skipped":   result["skipped"],
+            "message":   (
+                f"Extracted {result['doc_count']} docs for '{result['slug']}'. "
+                f"Call POST /corpus/rebuild to activate."
+            ),
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Corpus upload error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/corpus/{slug}", tags=["Corpus"])
+def remove_corpus(slug: str):
+    """
+    Remove a dynamically added company's corpus.
+    Built-in companies (hackerrank, claude, visa) cannot be removed via API.
+    Call POST /corpus/rebuild after deletion to update the index.
+    """
+    try:
+        delete_company_corpus(slug)
+        return {
+            "success": True,
+            "message": f"Corpus for '{slug}' deleted. Call POST /corpus/rebuild to update index.",
+        }
+    except (ValueError, FileNotFoundError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/corpus/rebuild", tags=["Corpus"])
+async def trigger_rebuild():
+    """
+    Rebuild the BM25 index with all current corpus documents.
+    Run this after uploading new company docs or deleting a company.
+
+    Note: Rebuilding blocks until complete (~2-5 seconds for typical corpora).
+    """
+    global _retriever
+    try:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        # Run in thread pool to avoid blocking the async event loop
+        _retriever = await loop.run_in_executor(None, rebuild_retriever)
+        total_chunks = len(_retriever._chunks) if hasattr(_retriever, "_chunks") else 0
+        companies    = cm_list()
+        return {
+            "success":       True,
+            "chunks_indexed": total_chunks,
+            "company_count":  len(companies),
+            "companies":      [c["slug"] for c in companies],
+            "message":        f"BM25 index rebuilt: {total_chunks} chunks from {len(companies)} companies.",
+        }
+    except Exception as e:
+        logger.error(f"Corpus rebuild error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
