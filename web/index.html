@@ -7,23 +7,22 @@
   <meta name="description" content="Intelligent customer support ticket routing powered by BM25 retrieval and Gemini AI synthesis." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="/web/style.css" />
 </head>
 <body>
 
-  <!-- ── Background Orbs ───────────────────────────────────────────── -->
   <div class="bg-orb orb-1"></div>
   <div class="bg-orb orb-2"></div>
   <div class="bg-orb orb-3"></div>
 
-  <!-- ── Header ────────────────────────────────────────────────────── -->
+  <!-- ── Header ─────────────────────────────────────────────────── -->
   <header class="header">
     <div class="header-inner">
       <div class="logo">
         <div class="logo-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44l-1.22-8.53A2.5 2.5 0 0 1 8.28 8H2.5A2.5 2.5 0 0 1 0 5.5V4.5A2.5 2.5 0 0 1 2.5 2z"/>
-            <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44l1.22-8.53A2.5 2.5 0 0 0 15.72 8H21.5A2.5 2.5 0 0 0 24 5.5V4.5A2.5 2.5 0 0 0 21.5 2z"/>
+            <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
           </svg>
         </div>
         <div class="logo-text">
@@ -31,21 +30,27 @@
           <span class="logo-sub">BM25 + Gemini Intelligence</span>
         </div>
       </div>
-      <div class="header-status">
-        <div class="status-dot" id="statusDot"></div>
-        <span class="status-label" id="statusLabel">Connecting…</span>
+      <div class="header-right">
+        <div class="header-stat" id="headerTotal" style="display:none">
+          <span class="header-stat-value" id="headerTotalVal">0</span>
+          <span class="header-stat-label">triaged</span>
+        </div>
+        <div class="header-status">
+          <div class="status-dot" id="statusDot"></div>
+          <span class="status-label" id="statusLabel">Connecting…</span>
+        </div>
       </div>
     </div>
   </header>
 
-  <!-- ── Main ──────────────────────────────────────────────────────── -->
+  <!-- ── Main ───────────────────────────────────────────────────── -->
   <main class="main">
 
-    <!-- Stats Bar -->
+    <!-- Stats Bar (shown after first triage) -->
     <div class="stats-bar" id="statsBar" style="display:none">
       <div class="stat-card">
         <div class="stat-value" id="statTotal">0</div>
-        <div class="stat-label">Total Processed</div>
+        <div class="stat-label">Session Total</div>
       </div>
       <div class="stat-card stat-replied">
         <div class="stat-value" id="statReplied">0</div>
@@ -57,54 +62,56 @@
       </div>
       <div class="stat-card stat-time">
         <div class="stat-value" id="statTime">—</div>
-        <div class="stat-label">Elapsed</div>
+        <div class="stat-label">Time</div>
       </div>
     </div>
 
-    <!-- Tab Navigation -->
+    <!-- Tabs -->
     <div class="tabs">
       <button class="tab-btn active" id="tabSingle" onclick="switchTab('single')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         Single Ticket
       </button>
       <button class="tab-btn" id="tabBatch" onclick="switchTab('batch')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         Batch CSV
+      </button>
+      <button class="tab-btn" id="tabHistory" onclick="switchTab('history')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="12 8 12 12 14 14"/><path d="M3.05 11a9 9 0 1 0 .5-4.5"/><polyline points="3 7 3 11 7 11"/></svg>
+        History
+      </button>
+      <button class="tab-btn" id="tabAnalytics" onclick="switchTab('analytics')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Analytics
       </button>
     </div>
 
-    <!-- ── SINGLE TICKET TAB ───────────────────────────────────────── -->
+    <!-- ── SINGLE TICKET ─────────────────────────────────────────── -->
     <div id="panelSingle" class="panel">
       <div class="panel-grid">
-
-        <!-- Form -->
         <div class="card form-card">
           <div class="card-header">
             <h2 class="card-title">Submit a Ticket</h2>
             <p class="card-desc">Enter ticket details for real-time AI triage.</p>
           </div>
-
           <form id="singleForm" onsubmit="submitSingle(event)">
             <div class="field">
               <label class="field-label" for="company">Company / Domain</label>
-              <select class="field-input" id="company" name="company">
+              <select class="field-input" id="company">
                 <option value="None">Auto-detect</option>
                 <option value="HackerRank">HackerRank</option>
                 <option value="claude">Claude (Anthropic)</option>
                 <option value="visa">Visa</option>
               </select>
             </div>
-
             <div class="field">
               <label class="field-label" for="subject">Subject <span class="optional">(optional)</span></label>
-              <input class="field-input" id="subject" name="subject" type="text" placeholder="e.g. Password Reset Help" />
+              <input class="field-input" id="subject" type="text" placeholder="e.g. Password Reset Help" />
             </div>
-
             <div class="field">
               <label class="field-label" for="issue">Ticket Issue <span class="required">*</span></label>
-              <textarea class="field-input field-textarea" id="issue" name="issue" placeholder="Describe the customer's issue in detail…" required rows="6"></textarea>
+              <textarea class="field-input field-textarea" id="issue" placeholder="Describe the customer's issue…" required rows="6"></textarea>
             </div>
-
             <button class="btn btn-primary" type="submit" id="submitBtn">
               <span class="btn-text">Triage Ticket</span>
               <div class="btn-spinner hidden" id="btnSpinner"></div>
@@ -112,109 +119,135 @@
           </form>
         </div>
 
-        <!-- Result -->
         <div class="card result-card" id="resultCard">
           <div class="result-empty" id="resultEmpty">
-            <div class="empty-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-            </div>
+            <div class="empty-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></div>
             <p>Submit a ticket to see the AI triage result here.</p>
           </div>
-
           <div class="result-content hidden" id="resultContent">
             <div class="result-header">
               <h3 class="card-title">Triage Result</h3>
               <div class="badge" id="resultBadge">—</div>
             </div>
-
-            <div class="result-grid">
-              <div class="result-meta">
-                <div class="meta-item">
-                  <span class="meta-label">Request Type</span>
-                  <span class="meta-value" id="resRequestType">—</span>
-                </div>
-                <div class="meta-item">
-                  <span class="meta-label">Product Area</span>
-                  <span class="meta-value" id="resProductArea">—</span>
-                </div>
-              </div>
+            <div class="result-meta" style="margin-bottom:16px">
+              <div class="meta-item"><span class="meta-label">Request Type</span><span class="meta-value" id="resRequestType">—</span></div>
+              <div class="meta-item"><span class="meta-label">Product Area</span><span class="meta-value" id="resProductArea">—</span></div>
             </div>
-
-            <div class="result-section">
-              <div class="section-label">AI Response</div>
-              <div class="response-box" id="resResponse">—</div>
-            </div>
-
-            <div class="result-section">
-              <div class="section-label">Justification</div>
-              <div class="justification-box" id="resJustification">—</div>
-            </div>
+            <div class="result-section"><div class="section-label">AI Response</div><div class="response-box" id="resResponse">—</div></div>
+            <div class="result-section"><div class="section-label">Justification</div><div class="justification-box" id="resJustification">—</div></div>
           </div>
         </div>
-
       </div>
     </div>
 
-    <!-- ── BATCH CSV TAB ───────────────────────────────────────────── -->
+    <!-- ── BATCH CSV ─────────────────────────────────────────────── -->
     <div id="panelBatch" class="panel hidden">
       <div class="card">
         <div class="card-header">
           <h2 class="card-title">Batch CSV Triage</h2>
           <p class="card-desc">Upload a CSV with an <code class="code-inline">issue</code> column. Optionally include <code class="code-inline">subject</code> and <code class="code-inline">company</code>.</p>
         </div>
-
-        <!-- Drop Zone -->
-        <div class="drop-zone" id="dropZone"
-          ondragover="handleDragOver(event)"
-          ondragleave="handleDragLeave(event)"
-          ondrop="handleDrop(event)"
-          onclick="document.getElementById('csvFile').click()">
-          <div class="drop-icon" id="dropIcon">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          </div>
+        <div class="drop-zone" id="dropZone" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" onclick="document.getElementById('csvFile').click()">
+          <div class="drop-icon" id="dropIcon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
           <p class="drop-text" id="dropText">Drag & drop your CSV here</p>
           <p class="drop-sub" id="dropSub">or click to browse</p>
           <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="handleFileSelect(event)" />
         </div>
-
-        <!-- Batch Actions -->
         <div class="batch-actions" id="batchActions" style="display:none">
-          <div class="file-info" id="fileInfo">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            <span id="fileName">—</span>
-            <span class="file-size" id="fileSize">—</span>
-          </div>
+          <div class="file-info"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span id="fileName">—</span><span class="file-size" id="fileSize">—</span></div>
           <div class="batch-btns">
             <button class="btn btn-ghost" onclick="clearFile()">Clear</button>
-            <button class="btn btn-primary" id="processBtn" onclick="processBatch()">
-              <span class="btn-text">Process Batch</span>
-              <div class="btn-spinner hidden" id="batchSpinner"></div>
-            </button>
+            <button class="btn btn-primary" id="processBtn" onclick="processBatch()"><span class="btn-text">Process Batch</span><div class="btn-spinner hidden" id="batchSpinner"></div></button>
           </div>
         </div>
-
-        <!-- Progress Bar -->
         <div class="progress-wrap hidden" id="progressWrap">
-          <div class="progress-bar">
-            <div class="progress-fill" id="progressFill"></div>
-          </div>
+          <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
           <span class="progress-label" id="progressLabel">Processing…</span>
         </div>
       </div>
-
-      <!-- Results Table -->
       <div class="card hidden" id="batchResultCard">
         <div class="batch-result-header">
           <h3 class="card-title">Results</h3>
-          <button class="btn btn-success" onclick="downloadResult()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Download CSV
-          </button>
+          <button class="btn btn-success" onclick="downloadResult()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download CSV</button>
         </div>
+        <div class="table-wrap"><table class="result-table" id="resultTable"><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- ── HISTORY TAB ───────────────────────────────────────────── -->
+    <div id="panelHistory" class="panel hidden">
+      <div class="card">
+        <div class="batch-result-header">
+          <div>
+            <h2 class="card-title">Triage History</h2>
+            <p class="card-desc" style="margin-top:4px">All past decisions saved in the database.</p>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="field-input" id="historyCompanyFilter" style="width:160px;padding:8px 12px" onchange="loadHistory()">
+              <option value="">All companies</option>
+              <option value="hackerrank">HackerRank</option>
+              <option value="claude">Claude</option>
+              <option value="visa">Visa</option>
+            </select>
+            <button class="btn btn-ghost" onclick="loadHistory()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+        <div id="historyLoading" class="loading-msg">Loading history…</div>
         <div class="table-wrap">
-          <table class="result-table" id="resultTable">
-            <thead id="tableHead"></thead>
-            <tbody id="tableBody"></tbody>
+          <table class="result-table" id="historyTable" style="display:none">
+            <thead>
+              <tr>
+                <th>#</th><th>Time</th><th>Company</th><th>Issue</th>
+                <th>Status</th><th>Type</th><th>Source</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+        <div id="historyEmpty" class="result-empty hidden"><div class="empty-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h18v18H3z"/><path d="M3 9h18"/><path d="M9 21V9"/></svg></div><p>No history yet. Triage some tickets first!</p></div>
+      </div>
+    </div>
+
+    <!-- ── ANALYTICS TAB ─────────────────────────────────────────── -->
+    <div id="panelAnalytics" class="panel hidden">
+      <!-- KPI cards -->
+      <div class="analytics-kpis" id="analyticsKpis">
+        <div class="kpi-card"><div class="kpi-value" id="kpiTotal">—</div><div class="kpi-label">Total Triaged</div></div>
+        <div class="kpi-card kpi-green"><div class="kpi-value" id="kpiReplied">—</div><div class="kpi-label">Replied</div></div>
+        <div class="kpi-card kpi-amber"><div class="kpi-value" id="kpiEscalated">—</div><div class="kpi-label">Escalated</div></div>
+        <div class="kpi-card kpi-purple"><div class="kpi-value" id="kpiRate">—</div><div class="kpi-label">Escalation Rate</div></div>
+      </div>
+
+      <!-- Charts row -->
+      <div class="charts-grid">
+        <div class="card chart-card">
+          <h3 class="card-title" style="margin-bottom:20px">Status Breakdown</h3>
+          <div class="chart-wrap"><canvas id="chartStatus"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <h3 class="card-title" style="margin-bottom:20px">By Company</h3>
+          <div class="chart-wrap"><canvas id="chartCompany"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <h3 class="card-title" style="margin-bottom:20px">Request Types</h3>
+          <div class="chart-wrap"><canvas id="chartTypes"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <h3 class="card-title" style="margin-bottom:20px">Daily Volume (14 days)</h3>
+          <div class="chart-wrap"><canvas id="chartDaily"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Escalation rate table -->
+      <div class="card">
+        <h3 class="card-title" style="margin-bottom:16px">Escalation Rate by Company</h3>
+        <div class="table-wrap">
+          <table class="result-table" id="escalationTable">
+            <thead><tr><th>Company</th><th>Total</th><th>Escalated</th><th>Rate</th><th>Bar</th></tr></thead>
+            <tbody id="escalationBody"></tbody>
           </table>
         </div>
       </div>
@@ -222,9 +255,7 @@
 
   </main>
 
-  <!-- Toast Notification -->
   <div class="toast hidden" id="toast"></div>
-
   <script src="/web/app.js"></script>
 </body>
 </html>

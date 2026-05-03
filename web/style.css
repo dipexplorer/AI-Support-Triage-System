@@ -60,7 +60,11 @@ body {
 .orb-3 { width: 300px; height: 300px; background: rgba(245,158,11,0.06); top: 40%; left: 50%; animation-delay: -14s; }
 @keyframes orb-drift { to { transform: translate(30px, 20px) scale(1.05); } }
 
-/* ── Header ──────────────────────────────────────────────────── */
+.header-right { display:flex; align-items:center; gap:20px; }
+.header-stat { display:flex; align-items:baseline; gap:5px; }
+.header-stat-value { font-size:18px; font-weight:700; color:var(--accent-light); }
+.header-stat-label { font-size:11px; color:var(--text-muted); }
+
 .header {
   position: sticky;
   top: 0;
@@ -495,3 +499,35 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+/* ── History & Analytics ──────────────────────────────────────── */
+.loading-msg { text-align:center; padding:40px; color:var(--text-muted); font-size:13px; }
+
+/* KPI Cards */
+.analytics-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+@media(max-width:768px){ .analytics-kpis { grid-template-columns:repeat(2,1fr); } }
+.kpi-card {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:20px 24px;
+  display:flex; flex-direction:column; align-items:center;
+  gap:6px; transition:border-color 0.2s;
+}
+.kpi-card:hover { border-color:var(--border-hover); }
+.kpi-value { font-size:32px; font-weight:700; line-height:1; }
+.kpi-label { font-size:11px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em; }
+.kpi-green .kpi-value { color:var(--green); }
+.kpi-amber .kpi-value { color:var(--amber); }
+.kpi-purple .kpi-value { color:var(--accent-light); }
+
+/* Charts */
+.charts-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:20px; margin-bottom:20px; }
+@media(max-width:900px){ .charts-grid { grid-template-columns:1fr; } }
+.chart-card { }
+.chart-wrap { position:relative; height:220px; }
+
+/* Escalation bar mini */
+.esc-bar-wrap { width:120px; background:rgba(255,255,255,0.06); border-radius:4px; height:8px; overflow:hidden; }
+.esc-bar-fill { height:100%; border-radius:4px; background:var(--amber); transition:width 0.6s ease; }
+

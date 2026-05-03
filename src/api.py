@@ -2,24 +2,26 @@
 api.py — FastAPI REST API for AI Support Triage System.
 
 ENDPOINTS:
-  GET  /health          → System health and corpus stats
-  POST /ask             → Triage a single ticket (JSON in, JSON out)
-  POST /batch           → Triage a CSV file (CSV in, CSV out)
+  GET  /             → Web UI Dashboard
+  GET  /health       → System health and corpus stats
+  POST /ask          → Triage a single ticket (JSON in, JSON out)
+  POST /batch        → Triage a CSV file (CSV in, CSV out)
+  GET  /history      → Recent triage decisions from SQLite
+  GET  /analytics    → Aggregated statistics for charts
 
 STARTUP:
   BM25 index is built ONCE at server startup and reused for all requests.
-  This means the first startup takes ~2 seconds, but every request after is instant.
+  SQLite DB is initialized at startup (creates file if not exists).
 """
 
 import io
 import sys
-import tempfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -38,6 +40,7 @@ from classifier import detect_company, classify_request_type, infer_product_area
 from safety import check as safety_check
 from retriever import get_retriever
 from agent import generate_response
+from database import init_db, save_ticket, get_history, get_analytics
 
 # ── Global BM25 Retriever (initialized once at startup) ───────────────────────
 _retriever = None
@@ -46,10 +49,14 @@ _retriever = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Build the BM25 index once at server startup.
-    This avoids rebuilding on every request — makes /ask near-instant.
+    Initialize DB and build the BM25 index once at server startup.
     """
     global _retriever
+    # Init SQLite
+    init_db()
+    logger.info("✅ SQLite database initialized.")
+
+    # Build BM25 index
     logger.info("🔧 Building BM25 index at startup...")
     _retriever = get_retriever()
     _retriever.build()
@@ -66,7 +73,7 @@ app = FastAPI(
         "Automatically classify, route, and respond to customer support tickets "
         "using BM25 retrieval and Gemini AI synthesis. Zero hallucination guaranteed."
     ),
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -102,7 +109,7 @@ class TicketRequest(BaseModel):
 
 
 class TriageResponse(BaseModel):
-    """Output model for /ask endpoint."""
+    """Output model for /ask and /history endpoints."""
     status: str
     product_area: str
     response: str
@@ -111,59 +118,77 @@ class TriageResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    """Output model for /health endpoint."""
     status: str
     corpus_domains: list[str]
     bm25_ready: bool
+    total_triaged: int
     message: str
 
 
 # ── Helper: process one ticket ─────────────────────────────────────────────────
 
-def _process_one(ticket: TicketInput) -> TriageResponse:
+def _process_one(ticket: TicketInput, source: str = "api") -> TriageResponse:
     """
     Run the full triage pipeline for a single ticket.
-    Returns a TriageResponse.
+    Saves result to SQLite. Returns a TriageResponse.
     """
     if _retriever is None:
-        raise HTTPException(status_code=503, detail="BM25 index not ready yet. Please retry in a moment.")
+        raise HTTPException(status_code=503, detail="BM25 index not ready yet. Please retry.")
 
     # Step 1: Classify
-    company     = detect_company(ticket.issue, ticket.subject, ticket.company)
-    req_type    = classify_request_type(ticket.issue, ticket.subject)
+    company      = detect_company(ticket.issue, ticket.subject, ticket.company)
+    req_type     = classify_request_type(ticket.issue, ticket.subject)
     product_area = infer_product_area(ticket.issue, company)
 
     # Step 2: Safety Gate
     safety = safety_check(ticket.issue, ticket.subject, req_type, product_area)
     if safety.escalate or (safety.output and safety.output.status == "replied"):
         o = safety.output
-        return TriageResponse(
+        result = TriageResponse(
             status=o.status, product_area=o.product_area,
             response=o.response, justification=o.justification,
             request_type=o.request_type,
         )
+    else:
+        # Step 3: BM25 Retrieval
+        search_company = company if company != "unknown" else None
+        chunks = _retriever.retrieve(ticket.query, company=search_company)
 
-    # Step 3: BM25 Retrieval
-    search_company = company if company != "unknown" else None
-    chunks = _retriever.retrieve(ticket.query, company=search_company)
+        # Step 4: Low confidence → escalate
+        if _retriever.is_low_confidence(chunks):
+            reason = f"No relevant docs found (score: {_retriever.top_score(chunks):.2f})."
+            o = make_escalation(reason, product_area, req_type)  # type: ignore
+            result = TriageResponse(
+                status=o.status, product_area=o.product_area,
+                response=o.response, justification=o.justification,
+                request_type=o.request_type,
+            )
+        else:
+            # Step 5: Generate response (Gemini or Smart Fallback)
+            o = generate_response(ticket, chunks, product_area, req_type)  # type: ignore
+            result = TriageResponse(
+                status=o.status, product_area=o.product_area,
+                response=o.response, justification=o.justification,
+                request_type=o.request_type,
+            )
 
-    # Step 4: Low confidence → escalate
-    if _retriever.is_low_confidence(chunks):
-        reason = f"No relevant docs found (score: {_retriever.top_score(chunks):.2f})."
-        o = make_escalation(reason, product_area, req_type)  # type: ignore
-        return TriageResponse(
-            status=o.status, product_area=o.product_area,
-            response=o.response, justification=o.justification,
-            request_type=o.request_type,
+    # Persist to SQLite
+    try:
+        save_ticket(
+            issue=ticket.issue,
+            status=result.status,
+            product_area=result.product_area,
+            request_type=result.request_type,
+            response=result.response,
+            justification=result.justification,
+            company=company,
+            subject=ticket.subject or "",
+            source=source,
         )
+    except Exception as db_err:
+        logger.warning(f"DB save failed (non-fatal): {db_err}")
 
-    # Step 5: Generate response (Gemini or Smart Fallback)
-    o = generate_response(ticket, chunks, product_area, req_type)  # type: ignore
-    return TriageResponse(
-        status=o.status, product_area=o.product_area,
-        response=o.response, justification=o.justification,
-        request_type=o.request_type,
-    )
+    return result
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -173,18 +198,23 @@ def serve_ui():
     """Serve the Web UI dashboard."""
     index = WEB_DIR / "index.html"
     if not index.exists():
-        return {"message": "Web UI not found. API is running at /docs"}
+        return {"message": "Web UI not found. API is running — go to /docs"}
     return FileResponse(str(index))
+
 
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 def health():
-    """
-    Check if the server is running and the BM25 index is ready.
-    """
+    """System health, readiness, and total tickets triaged so far."""
+    from database import get_analytics
+    try:
+        total = get_analytics().get("total", 0)
+    except Exception:
+        total = 0
     return HealthResponse(
         status="ok",
         corpus_domains=COMPANIES,
         bm25_ready=_retriever is not None and getattr(_retriever, "_built", False),
+        total_triaged=total,
         message="AI Support Triage System is operational.",
     )
 
@@ -193,10 +223,7 @@ def health():
 def ask(ticket: TicketRequest):
     """
     Triage a **single support ticket** in real-time.
-
-    - Provide the ticket `issue` text and optionally `subject` and `company`.
-    - The agent will classify, safety-check, retrieve relevant docs, and generate a response.
-    - Returns a structured JSON with `status`, `product_area`, `response`, `justification`, `request_type`.
+    Result is automatically saved to the history database.
     """
     input_ticket = TicketInput(
         issue=ticket.issue,
@@ -204,7 +231,7 @@ def ask(ticket: TicketRequest):
         company=ticket.company or "None",
     )
     try:
-        return _process_one(input_ticket)
+        return _process_one(input_ticket, source="api")
     except HTTPException:
         raise
     except Exception as e:
@@ -216,10 +243,8 @@ def ask(ticket: TicketRequest):
 async def batch(file: UploadFile = File(...)):
     """
     Triage a **batch of tickets from a CSV file**.
-
-    - Upload a CSV with columns: `issue`, `subject` (optional), `company` (optional).
-    - Returns a downloadable CSV with 5 extra columns:
-      `status`, `product_area`, `response`, `justification`, `request_type`.
+    All results are saved to the history database.
+    Returns a downloadable CSV.
     """
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Please upload a valid .csv file.")
@@ -234,10 +259,8 @@ async def batch(file: UploadFile = File(...)):
     if "issue" not in df.columns:
         raise HTTPException(status_code=400, detail="CSV must have an 'issue' column.")
 
-    if "subject" not in df.columns:
-        df["subject"] = ""
-    if "company" not in df.columns:
-        df["company"] = "None"
+    if "subject" not in df.columns: df["subject"] = ""
+    if "company" not in df.columns: df["company"] = "None"
 
     results = []
     for _, row in df.iterrows():
@@ -247,34 +270,55 @@ async def batch(file: UploadFile = File(...)):
             company=str(row.get("company", "None")),
         )
         try:
-            r = _process_one(ticket)
+            r = _process_one(ticket, source="batch")
             results.append({
-                "status": r.status,
-                "product_area": r.product_area,
-                "response": r.response,
-                "justification": r.justification,
+                "status": r.status, "product_area": r.product_area,
+                "response": r.response, "justification": r.justification,
                 "request_type": r.request_type,
             })
         except Exception as e:
             logger.error(f"Batch row error: {e}")
             results.append({
-                "status": "escalated",
-                "product_area": "general_support",
+                "status": "escalated", "product_area": "general_support",
                 "response": "Processing error — ticket escalated for manual review.",
-                "justification": str(e),
-                "request_type": "product_issue",
+                "justification": str(e), "request_type": "product_issue",
             })
 
-    # Merge results back with original data
     result_df = pd.concat([df, pd.DataFrame(results)], axis=1)
-
-    # Stream the CSV back as a downloadable file
     output = io.StringIO()
     result_df.to_csv(output, index=False)
     output.seek(0)
-
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=triage_output.csv"},
     )
+
+
+@app.get("/history", tags=["Analytics"])
+def history(
+    limit: int = Query(50, ge=1, le=500, description="Max number of records to return"),
+    offset: int = Query(0, ge=0),
+    company: Optional[str] = Query(None, description="Filter by company name"),
+):
+    """
+    Retrieve recent triage history from the SQLite database.
+    Useful for the History tab in the UI.
+    """
+    try:
+        rows = get_history(limit=limit, offset=offset, company=company)
+        return {"total": len(rows), "records": rows}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analytics", tags=["Analytics"])
+def analytics():
+    """
+    Aggregated statistics for charts: status breakdown, company breakdown,
+    request type distribution, daily volume, and escalation rates.
+    """
+    try:
+        return get_analytics()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
