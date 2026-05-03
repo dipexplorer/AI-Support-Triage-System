@@ -21,12 +21,16 @@ from typing import Optional
 import pandas as pd
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from pydantic import BaseModel
 
 # Add src to path so we can import our modules
 sys.path.insert(0, str(Path(__file__).parent))
+
+# Paths
+WEB_DIR = Path(__file__).parent.parent / "web"
 
 from config import CORPUS_DIR, COMPANIES
 from models import TicketInput, make_escalation
@@ -66,7 +70,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Allow all origins for local development (tighten for production)
+# Serve the web UI as static files
+if WEB_DIR.exists():
+    app.mount("/web", StaticFiles(directory=str(WEB_DIR)), name="web")
+
+# Allow all origins for local development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -159,6 +167,14 @@ def _process_one(ticket: TicketInput) -> TriageResponse:
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
+@app.get("/", include_in_schema=False)
+def serve_ui():
+    """Serve the Web UI dashboard."""
+    index = WEB_DIR / "index.html"
+    if not index.exists():
+        return {"message": "Web UI not found. API is running at /docs"}
+    return FileResponse(str(index))
 
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 def health():
