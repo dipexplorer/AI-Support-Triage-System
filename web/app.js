@@ -108,6 +108,9 @@ function renderSingleResult(data) {
   // Render markdown in the response
   document.getElementById('resResponse').innerHTML      = md2html(data.response);
   document.getElementById('resJustification').textContent = data.justification;
+  // Store ticket_id for feedback and reset the feedback UI
+  _lastTicketId = data.ticket_id || 0;
+  resetFeedbackUI();
 }
 
 // ── Batch ─────────────────────────────────────────────────────────────────────
@@ -268,20 +271,51 @@ async function loadAnalytics() {
     renderKPIs(data);
     renderCharts(data);
     renderEscalationTable(data.escalation_by_company || []);
+    loadLowRated();   // load feedback low-rated table
   } catch(e) {
     showToast('Failed to load analytics.','error');
   }
 }
+
+async function loadLowRated() {
+  try {
+    const res  = await fetch(`${API_BASE}/feedback/summary`);
+    const data = await res.json();
+    const card = document.getElementById('lowRatedCard');
+    const body = document.getElementById('lowRatedBody');
+    if (!data.low_rated || data.low_rated.length === 0) {
+      if (card) card.style.display = 'none';
+      return;
+    }
+    if (card) card.style.display = '';
+    body.innerHTML = data.low_rated.map(r => `
+      <tr>
+        <td><code>${r.id}</code></td>
+        <td>${escHtml(r.company)}</td>
+        <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+            title="${escHtml(r.issue)}">${escHtml(r.issue.substring(0,60))}${r.issue.length>60?'…':''}</td>
+        <td><span class="badge badge-${r.status}" style="font-size:10px">${r.status.toUpperCase()}</span></td>
+        <td style="color:var(--text-muted);font-size:12px">${escHtml(r.comment || '—')}</td>
+        <td style="color:var(--text-muted);font-size:11px">${r.timestamp?.substring(0,10)||'—'}</td>
+      </tr>`).join('');
+  } catch(e) { /* silently skip if no feedback yet */ }
+}
+
 
 function renderKPIs(data) {
   const replied   = data.status_counts?.replied   || 0;
   const escalated = data.status_counts?.escalated || 0;
   const total     = data.total || 0;
   const rate      = total ? Math.round(escalated/total*100) : 0;
-  document.getElementById('kpiTotal').textContent    = total.toLocaleString();
-  document.getElementById('kpiReplied').textContent  = replied.toLocaleString();
+  document.getElementById('kpiTotal').textContent     = total.toLocaleString();
+  document.getElementById('kpiReplied').textContent   = replied.toLocaleString();
   document.getElementById('kpiEscalated').textContent = escalated.toLocaleString();
-  document.getElementById('kpiRate').textContent     = rate + '%';
+  document.getElementById('kpiRate').textContent      = rate + '%';
+  // Approval rate from feedback
+  const fb  = data.feedback || {};
+  const apr = fb.approval_rate != null ? fb.approval_rate + '%' : '—';
+  const approvalEl = document.getElementById('kpiApproval');
+  if (approvalEl) approvalEl.textContent = apr;
 }
 
 const CHART_COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316'];
@@ -599,3 +633,68 @@ function setRebuildPending() {
   document.getElementById('rebuildSub').textContent    = 'New docs uploaded. Click Rebuild to activate them.';
   document.getElementById('rebuildStatus').style.color = 'var(--amber)';
 }
+
+// ── Feedback (👍/👎) ──────────────────────────────────────────────────────────
+
+let _lastTicketId   = 0;
+let _pendingRating  = 0;   // -1 or +1, waiting for optional comment
+
+function resetFeedbackUI() {
+  const sec = document.getElementById('feedbackSection');
+  if (!sec) return;
+  document.getElementById('feedbackBtns').classList.remove('hidden');
+  document.getElementById('feedbackCommentWrap').classList.add('hidden');
+  document.getElementById('feedbackSent').classList.add('hidden');
+  document.getElementById('feedbackComment').value = '';
+  document.getElementById('fbUp').classList.remove('selected');
+  document.getElementById('fbDn').classList.remove('selected');
+  _pendingRating = 0;
+}
+
+async function submitFeedback(rating) {
+  if (!_lastTicketId) { showToast('No ticket to rate yet.', 'error'); return; }
+
+  _pendingRating = rating;
+
+  // Visually select the button immediately
+  document.getElementById('fbUp').classList.toggle('selected', rating === 1);
+  document.getElementById('fbDn').classList.toggle('selected', rating === -1);
+
+  if (rating === -1) {
+    // Show comment box for negative feedback
+    document.getElementById('feedbackCommentWrap').classList.remove('hidden');
+    document.getElementById('feedbackComment').focus();
+  } else {
+    // Positive — send immediately
+    await _sendFeedback(rating, '');
+  }
+}
+
+async function sendFeedbackComment() {
+  const comment = document.getElementById('feedbackComment').value.trim();
+  await _sendFeedback(_pendingRating, comment);
+}
+
+async function _sendFeedback(rating, comment) {
+  try {
+    const res = await fetch(`${API_BASE}/feedback`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ ticket_id: _lastTicketId, rating, comment }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Feedback failed');
+
+    // Show thank-you message
+    document.getElementById('feedbackBtns').classList.add('hidden');
+    document.getElementById('feedbackCommentWrap').classList.add('hidden');
+    document.getElementById('feedbackSent').classList.remove('hidden');
+
+    const emoji = rating === 1 ? '👍' : '👎';
+    showToast(`${emoji} Feedback recorded. Thanks!`, 'success');
+  } catch(e) {
+    showToast(`Feedback error: ${e.message}`, 'error');
+  }
+}
+
+// Hook into submitSingle to capture ticket_id and reset feedback UI
+const _origRenderSingleResult = window.renderSingleResult;

@@ -139,6 +139,25 @@
             </div>
             <div class="result-section"><div class="section-label">AI Response</div><div class="response-box" id="resResponse">—</div></div>
             <div class="result-section"><div class="section-label">Justification</div><div class="justification-box" id="resJustification">—</div></div>
+            <!-- Feedback -->
+            <div class="feedback-section" id="feedbackSection">
+              <div class="feedback-label">Was this response helpful?</div>
+              <div class="feedback-btns" id="feedbackBtns">
+                <button class="feedback-btn up" id="fbUp" onclick="submitFeedback(1)">
+                  <span class="fb-emoji">👍</span> Yes, helpful
+                </button>
+                <button class="feedback-btn dn" id="fbDn" onclick="submitFeedback(-1)">
+                  <span class="fb-emoji">👎</span> Not helpful
+                </button>
+              </div>
+              <div class="feedback-comment-wrap hidden" id="feedbackCommentWrap">
+                <input class="feedback-comment-input" id="feedbackComment" type="text" placeholder="Tell us what was wrong (optional)…" />
+                <button class="btn btn-ghost" style="padding:8px 14px;font-size:12px" onclick="sendFeedbackComment()">Send</button>
+              </div>
+              <div class="feedback-sent hidden" id="feedbackSent">
+                ✅ Thank you for your feedback!
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -223,6 +242,7 @@
         <div class="kpi-card kpi-green"><div class="kpi-value" id="kpiReplied">—</div><div class="kpi-label">Replied</div></div>
         <div class="kpi-card kpi-amber"><div class="kpi-value" id="kpiEscalated">—</div><div class="kpi-label">Escalated</div></div>
         <div class="kpi-card kpi-purple"><div class="kpi-value" id="kpiRate">—</div><div class="kpi-label">Escalation Rate</div></div>
+        <div class="kpi-card kpi-blue"><div class="kpi-value" id="kpiApproval">—</div><div class="kpi-label">👍 Approval Rate</div></div>
       </div>
 
       <!-- Charts row -->
@@ -252,6 +272,18 @@
           <table class="result-table" id="escalationTable">
             <thead><tr><th>Company</th><th>Total</th><th>Escalated</th><th>Rate</th><th>Bar</th></tr></thead>
             <tbody id="escalationBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Low-rated Tickets Review -->
+      <div class="card low-rated-section" id="lowRatedCard" style="display:none">
+        <h3 class="card-title" style="margin-bottom:4px">👎 Low-Rated Responses (Need Review)</h3>
+        <p class="card-desc" style="margin-bottom:16px">Tickets that customers marked as unhelpful. Review and improve your docs or responses.</p>
+        <div class="table-wrap">
+          <table class="result-table" id="lowRatedTable">
+            <thead><tr><th>#</th><th>Company</th><th>Issue</th><th>Status</th><th>Comment</th><th>Time</th></tr></thead>
+            <tbody id="lowRatedBody"></tbody>
           </table>
         </div>
       </div>

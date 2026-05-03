@@ -40,7 +40,7 @@ from classifier import detect_company, classify_request_type, infer_product_area
 from safety import check as safety_check
 from retriever import get_retriever, rebuild_retriever
 from agent import generate_response
-from database import init_db, save_ticket, get_history, get_analytics
+from database import init_db, save_ticket, get_history, get_analytics, save_feedback, get_feedback_summary
 from corpus_manager import (
     list_companies  as cm_list,
     extract_zip_corpus,
@@ -116,11 +116,29 @@ class TicketRequest(BaseModel):
 
 class TriageResponse(BaseModel):
     """Output model for /ask and /history endpoints."""
-    status: str
+    ticket_id:    int = 0      # DB row id — used for feedback submission
+    status:       str
     product_area: str
-    response: str
+    response:     str
     justification: str
     request_type: str
+    company:      str = "unknown"
+
+
+class FeedbackInput(BaseModel):
+    """Input model for POST /feedback."""
+    ticket_id: int
+    rating:    int            # +1 = 👍 thumbs up, -1 = 👎 thumbs down
+    comment:   str = ""
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "ticket_id": 42,
+                "rating":    1,
+                "comment":   "Response was accurate and helpful!",
+            }
+        }
 
 
 class HealthResponse(BaseModel):
@@ -178,9 +196,10 @@ def _process_one(ticket: TicketInput, source: str = "api") -> TriageResponse:
                 request_type=o.request_type,
             )
 
-    # Persist to SQLite
+    # Persist to SQLite — capture ticket_id for feedback
+    ticket_id = 0
     try:
-        save_ticket(
+        ticket_id = save_ticket(
             issue=ticket.issue,
             status=result.status,
             product_area=result.product_area,
@@ -194,7 +213,15 @@ def _process_one(ticket: TicketInput, source: str = "api") -> TriageResponse:
     except Exception as db_err:
         logger.warning(f"DB save failed (non-fatal): {db_err}")
 
-    return result
+    return TriageResponse(
+        ticket_id=ticket_id,
+        status=result.status,
+        product_area=result.product_area,
+        response=result.response,
+        justification=result.justification,
+        request_type=result.request_type,
+        company=company,
+    )
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -421,4 +448,53 @@ async def trigger_rebuild():
         }
     except Exception as e:
         logger.error(f"Corpus rebuild error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Feedback ─────────────────────────────────────────────────────────────────
+
+@app.post("/feedback", tags=["Feedback"])
+def submit_feedback(payload: FeedbackInput):
+    """
+    Submit a thumbs-up (+1) or thumbs-down (-1) rating for a triaged ticket.
+
+    One rating per ticket (re-submitting overwrites the previous rating).
+
+    Args:
+        ticket_id: The id returned by /ask or visible in /history
+        rating:    +1 for helpful, -1 for unhelpful
+        comment:   Optional free-text comment (e.g. "Wrong product area")
+    """
+    if payload.rating not in (1, -1):
+        raise HTTPException(status_code=400, detail="rating must be +1 or -1")
+    try:
+        fb_id = save_feedback(
+            ticket_id=payload.ticket_id,
+            rating=payload.rating,
+            comment=payload.comment,
+        )
+        return {
+            "success":   True,
+            "feedback_id": fb_id,
+            "ticket_id": payload.ticket_id,
+            "rating":    payload.rating,
+            "message":   "Feedback recorded. Thank you!",
+        }
+    except Exception as e:
+        logger.error(f"Feedback save error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/feedback/summary", tags=["Feedback"])
+def feedback_summary():
+    """
+    Aggregated feedback statistics:
+      - Overall approval rate (% thumbs up)
+      - Total rated tickets
+      - List of low-rated (👎) tickets for human review
+      - Breakdown by company
+    """
+    try:
+        return get_feedback_summary()
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
