@@ -531,3 +531,34 @@ body {
 .esc-bar-wrap { width:120px; background:rgba(255,255,255,0.06); border-radius:4px; height:8px; overflow:hidden; }
 .esc-bar-fill { height:100%; border-radius:4px; background:var(--amber); transition:width 0.6s ease; }
 
+
+/* ── Markdown Response Rendering ─────────────────────────────── */
+.md-list-item {
+  display: flex;
+  gap: 10px;
+  padding: 3px 0;
+  line-height: 1.6;
+  font-size: 13px;
+}
+.md-num  { color: var(--accent-light); font-weight: 600; min-width: 20px; }
+.md-bullet { color: var(--accent-light); }
+.md-source {
+  margin-top: 12px;
+  padding: 6px 10px;
+  background: rgba(99,102,241,0.08);
+  border-left: 2px solid var(--accent);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+}
+.md-extra-label {
+  margin: 12px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.response-box strong { color: var(--text-primary); }
+.response-box em     { color: var(--text-secondary); font-style: normal; }

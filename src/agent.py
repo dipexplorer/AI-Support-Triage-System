@@ -22,7 +22,7 @@ from loguru import logger
 from google import genai
 
 from models import TicketInput, TicketOutput, DocChunk, make_escalation
-from config import GEMINI_API_KEY, DEFAULT_PRODUCT_AREA
+from config import GEMINI_API_KEY, DEFAULT_PRODUCT_AREA, MIN_RELEVANCE_SCORE
 
 # Initialize Gemini Client (optional enhancement)
 _client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
@@ -32,6 +32,54 @@ _quota_exhausted = False
 
 # Max words per chunk to send to Gemini
 _MAX_CHUNK_WORDS = 200
+
+
+# ── STOPWORDS (excluded from relevance check) ───────────────────────────────────────────
+_STOPWORDS = {
+    "how", "do", "i", "the", "a", "an", "to", "in", "of", "is", "it",
+    "my", "me", "can", "could", "would", "please", "help", "what", "why",
+    "when", "where", "who", "this", "that", "are", "was", "with", "for",
+    "have", "has", "be", "been", "get", "got", "need", "want", "use",
+    "will", "not", "no", "from", "on", "at", "by", "or", "and", "but",
+}
+
+# Company name tokens to exclude (they appear in every company doc)
+_COMPANY_TOKENS = {
+    "hackerrank", "hacker", "rank", "claude", "anthropic", "visa",
+    "support", "team", "account", "platform",
+}
+
+
+def _query_chunk_relevance(query: str, top_chunk: DocChunk) -> float:
+    """
+    Check if the top BM25 chunk actually answers the query intent.
+
+    Strategy:
+    - Strip stopwords and company-name tokens from the query.
+    - Check if remaining 'meaningful' words appear in the chunk (word boundary match).
+    - Return overlap ratio (0.0 - 1.0). Low score = irrelevant chunk.
+
+    Example:
+      query = "how to hack hacker rank"
+      After stripping: {"hack"}   ← only meaningful word
+      Check \bhack\b in chunk text → likely NOT found as standalone word
+      Score = 0.0 → escalate
+    """
+    meaningful = {
+        w.lower() for w in re.findall(r'\b[a-zA-Z]{3,}\b', query)
+        if w.lower() not in _STOPWORDS
+        and w.lower() not in _COMPANY_TOKENS
+    }
+
+    if not meaningful:
+        return 1.0   # No distinguishing words — can't evaluate, give benefit of doubt
+
+    chunk_lower = top_chunk.text.lower()
+    matches = sum(
+        1 for w in meaningful
+        if re.search(rf'\b{re.escape(w)}\b', chunk_lower)
+    )
+    return matches / len(meaningful)
 
 
 def _truncate(text: str, max_words: int = _MAX_CHUNK_WORDS) -> str:
@@ -152,9 +200,28 @@ def generate_response(
 ) -> TicketOutput:
     """
     Generate a grounded response.
-    Tries Gemini first (if available). Instantly falls back to Smart BM25 if quota is out.
+    1. Relevance check: are the retrieved chunks actually related to the query?
+    2. Try Gemini (fail-fast if quota exhausted).
+    3. Smart BM25 Fallback (deterministic, zero API).
     """
-    # Try Gemini enhancement (only 1 attempt, no waiting — fail fast)
+    # ── Relevance Guard ────────────────────────────────────────────────────────────
+    # Catch cases where BM25 matched company name tokens but the query
+    # intent has nothing to do with the returned documentation.
+    # e.g. "how to hack hacker rank" → BM25 finds HackerRank docs (because
+    # "hacker" is in every doc), but the intent is malicious/irrelevant.
+    if chunks:
+        relevance = _query_chunk_relevance(ticket.issue, chunks[0])
+        if relevance < MIN_RELEVANCE_SCORE:
+            logger.warning(
+                f"Low relevance ({relevance:.2f}) — query intent doesn't match docs. Escalating."
+            )
+            return make_escalation(
+                f"Query intent could not be matched to available documentation (relevance: {relevance:.2f}).",
+                product_area,
+                request_type,
+            )
+
+    # ── Try Gemini enhancement (fail-fast) ──────────────────────────────────────────
     if _client and not _quota_exhausted:
         company_label = ticket.company if ticket.company != "None" else "HackerRank, Claude, or Visa"
         context = ""
@@ -174,23 +241,21 @@ Reply ONLY valid JSON: {{"status":"...","product_area":"...","response":"...","j
         result = _try_gemini(prompt)
         if result:
             return TicketOutput(**{
-                "status": result.get("status", "escalated"),
+                "status":       result.get("status", "escalated"),
                 "product_area": result.get("product_area", product_area),
-                "response": result.get("response", "Escalated to human support."),
-                "justification": result.get("justification", "AI synthesized."),
+                "response":     result.get("response", "Escalated to human support."),
+                "justification":result.get("justification", "AI synthesized."),
                 "request_type": result.get("request_type", request_type),
             })
 
-    # Smart BM25 Fallback — deterministic, zero API, professional output
+    # ── Smart BM25 Fallback ────────────────────────────────────────────────────────────
     response_text, justification = _smart_format_response(chunks, ticket.issue)
-
-    # Determine status: escalate if no chunks or low-confidence
     status = "replied" if chunks else "escalated"
 
     return TicketOutput(**{
-        "status": status,
-        "product_area": product_area,
-        "response": response_text,
+        "status":        status,
+        "product_area":  product_area,
+        "response":      response_text,
         "justification": justification,
-        "request_type": request_type,
+        "request_type":  request_type,
     })

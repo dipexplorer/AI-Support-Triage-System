@@ -104,7 +104,8 @@ function renderSingleResult(data) {
   badge.className   = `badge badge-${data.status}`;
   document.getElementById('resRequestType').textContent = data.request_type.replace(/_/g,' ');
   document.getElementById('resProductArea').textContent  = data.product_area.replace(/_/g,' ');
-  document.getElementById('resResponse').textContent     = data.response;
+  // Render markdown in the response
+  document.getElementById('resResponse').innerHTML      = md2html(data.response);
   document.getElementById('resJustification').textContent = data.justification;
 }
 
@@ -400,6 +401,35 @@ function formatBytes(b) {
 
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/**
+ * Convert a subset of Markdown to safe HTML.
+ * Handles: **bold**, *italic*, 1. lists, - bullets, *(Source:...)*, \n
+ */
+function md2html(text) {
+  if (!text) return '';
+  let s = escHtml(text);
+  // **bold**
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // *italic* (not ** )
+  s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+  // *(Source: ...)* → styled chip
+  s = s.replace(/\*\(Source: (.+?)\)\*/g,
+    '<div class="md-source">📄 <em>$1</em></div>');
+  // **Additional context:** label
+  s = s.replace(/\*\*Additional context:\*\*/g,
+    '<div class="md-extra-label">Additional context</div>');
+  // Numbered list items  1. text
+  s = s.replace(/^(\d+)\.\s+(.+)$/gm,
+    '<div class="md-list-item"><span class="md-num">$1.</span> $2</div>');
+  // Bullet items  - text  or  * text
+  s = s.replace(/^[-*]\s+(.+)$/gm,
+    '<div class="md-list-item"><span class="md-bullet">•</span> $1</div>');
+  // Paragraph breaks
+  s = s.replace(/\n\n/g, '<br><br>');
+  s = s.replace(/\n/g, '<br>');
+  return s;
 }
 
 function parseCSVLine(line) {

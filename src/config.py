@@ -30,9 +30,13 @@ LOG_FILE   = LOG_DIR / "triage.log"
 
 # ── BM25 Retrieval ────────────────────────────────────────────────────────────
 TOP_K_DOCS          = 5     # chunks returned per query
-MIN_BM25_SCORE      = 1.0   # below this → escalate (no relevant docs found)
+MIN_BM25_SCORE      = 3.0   # below this → escalate (no relevant docs found)
 CHUNK_SIZE_WORDS    = 250   # words per corpus chunk
 CHUNK_OVERLAP_WORDS = 30    # overlap between consecutive chunks
+
+# ── Relevance Validation ──────────────────────────────────────────────────────
+# If query-chunk keyword overlap < this → escalate (irrelevant docs found)
+MIN_RELEVANCE_SCORE = 0.25  # at least 25% of meaningful query words in top chunk
 
 # ── Supported Domains ─────────────────────────────────────────────────────────
 # Add new domains here to expand the system to more products.
@@ -67,8 +71,9 @@ ESCALATION_KEYWORDS: list[str] = [
     "account hacked", "account compromised",
     # Irreversible account actions
     "delete account", "delete all data", "gdpr erasure", "remove all my data",
-    # Platform security
+    # Platform security / attack
     "security vulnerability", "vulnerability", "exploit", "bug bounty",
+    "penetration test", "pen test", "pentest",
     # Score / decision manipulation
     "increase my score", "increase score", "change my score",
     "review my answers", "move me to the next round", "tell the company to hire",
@@ -76,8 +81,9 @@ ESCALATION_KEYWORDS: list[str] = [
     # Billing disputes
     "refund", "pause subscription", "cancel subscription",
     "order id", "payment dispute", "chargeback",
-    # Admin bypass
+    # Admin bypass / social engineering
     "even though i am not", "even though i'm not", "restore my access",
+    "i am an admin", "i am a developer", "pretend you are",
     # Financial distress
     "urgent cash", "need cash now",
 ]
@@ -97,10 +103,27 @@ INJECTION_PATTERNS: list[str] = [
 
 # ── Malicious Command Patterns (regex) ────────────────────────────────────────
 MALICIOUS_PATTERNS: list[str] = [
+    # File/DB destruction
     r"delete (all )?files",
     r"rm -rf",
     r"drop (table|database)",
     r"give me (the )?code to",
+    # ── Attack intent patterns (NEW) ─────────────────────────────────────────
+    # "how to hack X", "how do I hack X", "how can I hack X"
+    r"how.{0,20}\bhack\b",
+    # "hack into", "hack the system/platform/account"
+    r"\bhack\s+(into|the|this|your|their)\b",
+    # "bypass security", "bypass authentication", "bypass 2FA"
+    r"\bbypass\s+(security|auth|authentication|2fa|login|password|verification)\b",
+    # "brute force", "brute-force"
+    r"\bbrute[\s-]?force\b",
+    # "SQL injection", "XSS", "CSRF"
+    r"\bsql\s*inject",
+    r"\b(xss|csrf|cross.?site)\b",
+    # "crack the password", "crack the key"
+    r"\bcrack\s+(the\s+)?(password|key|hash|token|account)",
+    # "how to cheat", "how to bypass"
+    r"how.{0,20}\b(cheat|bypass|exploit|manipulate)\b",
 ]
 
 # ── Default Product Area per Domain ───────────────────────────────────────────
