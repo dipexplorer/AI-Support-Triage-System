@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  triage-api:
+    build: .
+    container_name: ai-support-triage
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist SQLite DB and logs
+      - ./logs:/app/logs
+      # Persist dynamically uploaded company docs
+      - ./corpus:/app/corpus
+    env_file:
+      - .env
+    environment:
+      # Fallback defaults if not in .env
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
